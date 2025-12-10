@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:python_web_ide/widgets/keyboard_toolbar.dart';
 import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
@@ -35,7 +34,12 @@ class _IDEScreenState extends State<IDEScreen> {
   bool _preventHistoryUpdate = false;
 
   String? _currentRunningEditorId;
-  int numberOfStudents = 4;
+  int numberOfStudents = 1; // Start with 1 editor by default
+
+  // Keyboard dimensions
+  static const double KEYBOARD_HEIGHT = 200.0;
+  static const double KEYBOARD_MAX_WIDTH = 600.0;
+
   final List<String> _monacoElementIds = [
     'monaco-editor-container-1',
     'monaco-editor-container-2',
@@ -110,8 +114,9 @@ class _IDEScreenState extends State<IDEScreen> {
       _assignRollNumbers();
     }
 
-    // Register editor views - only register the ones we need
-    for (var i = 0; i < numberOfStudents; i++) {
+    // Register view factories for ALL 4 editors upfront
+    // This ensures they are available whenever we need them, not just on initial load
+    for (var i = 0; i < 4; i++) {
       final elementId = _monacoElementIds[i];
       final divId = _monacoDivIds[i];
 
@@ -321,6 +326,18 @@ print(hello())
 
     for (int i = 0; i < numberOfStudents; i++) {
       final id = _monacoDivIds[i];
+
+      // Ensure state is initialized for this editor
+      if (!_codeHistories.containsKey(id)) {
+        _codeHistories[id] = CodeHistory();
+        _currentFileNames[id] = 'untitled.py';
+        _editorOutputs[id] = '';
+        _autocompleteEnabledCache[id] = true;
+        _isPrettifyingCache[id] = false;
+        _keyboardPositions[id] = KeyboardPosition.betweenEditorOutput;
+        _outputExpanded[id] = false;
+      }
+
       _lastText[id] = initialCode;
       _codeHistories[id]?.addState(initialCode);
 
@@ -821,9 +838,8 @@ print(hello())
     return baseFlex;
   }
 
-  Widget _buildKeyboard(int editorIndex) {
-    return KeyboardToolbar(
-      key: ValueKey('keyboard-${_monacoDivIds[editorIndex]}'),
+  Widget _buildKeyboard(int editorIndex, {bool isSingleEditor = false}) {
+    final keyboard = KeyboardToolbar(
       onKeyPress: (key) => _handleKeyPress(key, _monacoDivIds[editorIndex]),
       onBackspace: () => _handleBackspace(_monacoDivIds[editorIndex]),
       onEnter: () => _handleEnter(_monacoDivIds[editorIndex]),
@@ -844,6 +860,20 @@ print(hello())
       onMenuSelection: _handleMenuSelection,
       editorId: _monacoDivIds[editorIndex],
     );
+
+    // For single-editor mode, center the keyboard and constrain its width
+    if (isSingleEditor) {
+      return Center(
+        child: SizedBox(
+          width: KEYBOARD_MAX_WIDTH,
+          height: KEYBOARD_HEIGHT,
+          child: keyboard,
+        ),
+      );
+    }
+
+    // For multi-editor mode, use fixed height without expanding
+    return SizedBox(height: KEYBOARD_HEIGHT, child: keyboard);
   }
 
   Widget _buildPromptInputSection() {
@@ -1413,7 +1443,10 @@ print(hello())
                                     // Show keyboard above editor if selected
                                     if (_keyboardPositions[_monacoDivIds[i]] ==
                                         KeyboardPosition.aboveEditor)
-                                      _buildKeyboard(i),
+                                      _buildKeyboard(
+                                        i,
+                                        isSingleEditor: numberOfStudents == 1,
+                                      ),
 
                                     // Editor section
                                     Expanded(
@@ -1445,7 +1478,10 @@ print(hello())
                                                 .betweenEditorOutput &&
                                         _outputExpanded[_monacoDivIds[i]] !=
                                             true)
-                                      _buildKeyboard(i),
+                                      _buildKeyboard(
+                                        i,
+                                        isSingleEditor: numberOfStudents == 1,
+                                      ),
 
                                     const Divider(
                                       height: 1,
@@ -1558,7 +1594,10 @@ print(hello())
                                             KeyboardPosition.belowOutput &&
                                         _outputExpanded[_monacoDivIds[i]] !=
                                             true)
-                                      _buildKeyboard(i),
+                                      _buildKeyboard(
+                                        i,
+                                        isSingleEditor: numberOfStudents == 1,
+                                      ),
                                   ],
                                 ),
                               ),
